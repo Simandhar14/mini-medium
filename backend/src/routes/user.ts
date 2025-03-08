@@ -18,10 +18,12 @@ userRouter.post("/signup", async (c: any) => {
     const { success } = signupschema.safeParse(body);
     if (!success) {
       c.status(411);
+
       return c.text("Invalid input types or inputs not correct");
     }
     const user = await prisma.user.create({
       data: {
+        name: body.name,
         username: body.username,
         password: body.password,
       },

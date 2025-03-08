@@ -5,23 +5,14 @@ import { verify } from "hono/jwt";
 import { Context } from "hono";
 import { createblogschema, updateblogschema } from "@simandhar14/medium-common";
 
-type Bindings = {
-  datasourceUrl: string;
-  DIRECT_URL: string;
-};
-
-type Variables = {
-  userId: string;
-};
-
-type AppContext = Context<{
-  Bindings: Bindings;
-  Variables: Variables;
-}>;
-
 export const blogRouter = new Hono<{
-  Bindings: Bindings;
-  Variables: Variables;
+  Bindings: {
+    DIRECT_URL: string;
+    JWT_SECRET: string;
+  };
+  Variables: {
+    userId: string;
+  };
 }>();
 
 const createPrisma = (c: any) =>
@@ -29,36 +20,43 @@ const createPrisma = (c: any) =>
     datasourceUrl: c.env.DIRECT_URL,
   }).$extends(withAccelerate());
 
-blogRouter.use("/*", async (c: any, next) => {
-  const authHeader = c.req.header("Authorization");
-  if (!authHeader) {
-    c.status(401);
-    return c.json({ message: "No token provided" });
-  }
-
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : authHeader;
-
+blogRouter.use("/*", async (c, next) => {
+  const authHeader = c.req.header("authorization") || "";
   try {
-    const user = await verify(token, c.env.JWT_SECRET);
-    if (!user?.id) {
-      c.status(401);
-      return c.json({ message: "Unauthorized" });
+    const user = await verify(authHeader, c.env.JWT_SECRET);
+    if (user) {
+      c.set("userId", user.id);
+      await next();
+    } else {
+      c.status(403);
+      return c.json({
+        message: "You are not logged in",
+      });
     }
-
-    c.set("userId", user.id as string);
-    await next();
-  } catch (error) {
-    c.status(401);
-    return c.json({ message: "You are not logged in" });
+  } catch (e) {
+    c.status(403);
+    console.log(e);
+    return c.json({
+      message: "You are not logged in",
+    });
   }
 });
 
 blogRouter.get("/bulk", async (c) => {
   const prisma = createPrisma(c);
   try {
-    const blogs = await prisma.blog.findMany();
+    const blogs = await prisma.blog.findMany({
+      select: {
+        content: true,
+        title: true,
+        id: true,
+        author: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
     return c.json({ blogs });
   } catch (error) {
     console.log(error);
@@ -68,24 +66,36 @@ blogRouter.get("/bulk", async (c) => {
 });
 
 blogRouter.get("/:id", async (c) => {
-  const prisma = createPrisma(c);
+  const id = c.req.param("id");
+  const prisma = new PrismaClient({
+    datasourceUrl: c.env.DIRECT_URL,
+  }).$extends(withAccelerate());
+
   try {
-    const paramid = c.req.param("id");
-    if (!paramid) {
-      c.status(411);
-      return c.json({ message: "Invalid id / id not provided" });
-    }
     const blog = await prisma.blog.findFirst({
       where: {
-        id: Number(paramid),
+        id: Number(id),
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        author: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
+
     return c.json({
       blog,
     });
-  } catch (error) {
-    console.log(error);
+  } catch (e) {
     c.status(411);
+    return c.json({
+      message: "Error while fetching blog post",
+    });
   }
 });
 
@@ -93,26 +103,36 @@ blogRouter.post("/", async (c) => {
   const prisma = createPrisma(c);
   try {
     const body = await c.req.json();
-    const { success } = createblogschema.safeParse(body);
-    if (!success) {
+
+    // Validate request body
+    const result = createblogschema.safeParse(body);
+    if (!result.success) {
       c.status(411);
       return c.text("Invalid input types or inputs not correct");
     }
+
+    const { title, content } = result.data;
+
+    // Ensure userId is valid
+    const authorId = c.get("userId");
+
+    // Create blog entry
     const blog = await prisma.blog.create({
       data: {
-        title: body.title,
-        content: body.content,
-        authorId: Number(c.get("userId")),
+        title,
+        content,
+        authorId: Number(authorId),
       },
     });
-    return c.json({
-      id: blog.id,
-    });
+
+    return c.json({ id: blog.id });
   } catch (error) {
-    console.log(error);
-    c.status(411);
+    console.error("Error creating blog:", error);
+    c.status(500);
+    return c.text("Internal Server Error");
   }
 });
+
 blogRouter.put("/", async (c) => {
   const prisma = createPrisma(c);
   try {
