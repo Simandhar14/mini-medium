@@ -4,6 +4,26 @@ This project effectively replicates a **mini Medium-like blogging platform**, fe
 
 ## Website Preview
 
+**Signup Page**
+
+![Image](https://github.com/user-attachments/assets/5cc94a9c-5f81-4837-b2ef-2fa545898c47)
+
+**Signin Page**
+
+![Image](https://github.com/user-attachments/assets/dcbb4c99-1f17-4c65-9018-e42219ecab5f)
+
+**Blogs Page**
+
+![Image](https://github.com/user-attachments/assets/963e4cc2-7a69-4191-acf7-437e295ed495)
+
+**Single Blog Page**
+
+![Image](https://github.com/user-attachments/assets/880456ea-033b-455e-b783-42f9010d8147)
+
+**Create a new Blog**
+
+![Image](https://github.com/user-attachments/assets/8ee39931-16e0-4873-94e2-42ead7e566d1)
+
 ## Features of the Project
 
 - **User Interface:**
